@@ -1,0 +1,751 @@
+---
+title: Describing our ignorance about the life history and demography of Thraupidae family.
+author: "Edgar L de Lima"
+date: "30/03/2021"
+output: html_document
+---
+
+# Database construction
+
+1. Defining working directory, loading packages and database.
+```{r, message=FALSE}
+setwd("C:\\Users\\Edgar\\OneDrive - unb.br\\Doutorado\\CapI\\Dados_analises")
+library("tidyverse")
+library("bibliometrix")
+library("openxlsx")
+library("readxl")
+library("ggpubr")
+
+web<-convert2df("WOS.bib","wos", "bibtex")
+scop<- convert2df("scopus.bib","scopus", "bibtex")
+```
+
+
+2. Joining the data from the two databases, removing duplicates and saving the new dataset.
+```{r}
+dados=  mergeDbSources(scop, web, remove.duplicated = T )
+nrow(dados)
+write.xlsx(dados, "Dados.xlsx")
+```
+
+
+3. Filtering only the studies that passed through the reading of abstract.
+```{r}
+screnned<-read_excel("dados.xlsx") 
+filtrados<- screnned%>% filter(INCLUDE== "yes")
+write.xlsx(filtrados, "Dados2.xlsx")
+```
+
+
+# Treating and analyzing the database.
+
+1. Loading the Prestonian and Raunkiæran shortfalls database.
+```{r}
+demo<- read.xlsx("Dados_lacunas.xlsx", sheet = 1)
+hist<- read.xlsx("Dados_lacunas.xlsx", sheet = 2)
+View(demo)
+View(hist)
+```
+
+
+2. Data for temporal analysis of publications.
+```{r}
+tdem<- demo%>%select(ID,Year)
+tlhist<- hist%>%select(ID,Year)
+All<-rbind(tdem,tlhist)
+
+tdem<-tdem%>%group_by(Year)%>%
+  distinct(ID, .keep_all = T)
+tlhist<-tlhist%>%group_by(Year)%>%
+  distinct(ID, .keep_all = T)
+All<-All%>%group_by(Year)%>%
+  distinct(ID, .keep_all = T)
+fall<- data.frame(table(All$Year))
+fall[,1]<-as.numeric(as.character(fall$Var1))
+View(fall)
+
+```
+
+3. Calculating the total number of articles per year.
+```{r}
+alldata<- read.xlsx("Dados2.xlsx", sheet = 1)
+ano<- alldata%>%select(PY)%>%table()%>%
+  data.frame()
+ano[,1]<-as.numeric(as.character(ano$.))
+fall$Var1
+ano<-ano[ano[,1]>=2003,]
+ano<-ano[c(-2,-3,-4),]
+temp<- data.frame(fall, ano$Freq)
+temp<- mutate(temp, publipad= Freq/ano.Freq)
+temp<- mutate(temp, posi = publipad+0.03)
+View(temp)
+```
+
+
+3.1. Calcular o número de artigos por ano separademente para cada lacuna.
+```{r}
+tdem<- demo%>%select(ID,Year)
+tlhist<- hist%>%select(ID,Year)
+
+tdem<-tdem%>%group_by(Year)%>%
+  distinct(ID, .keep_all = T)
+tlhist<-tlhist%>%group_by(Year)%>%
+  distinct(ID, .keep_all = T)
+View(tdem)
+View(tlhist)
+```
+
+3.2. Calculating the total number of articles per year for each shortfall.
+```{r}
+# Prestonian shortfall
+prest<- tdem%>%select(Year)%>%table()%>%
+  data.frame()
+prest$.<- as.numeric(as.character(prest$.))
+colnames(prest)<- c("year", "NStudy")
+Npad<-prest$NStudy/ano[ano$.%in% prest$year,2]
+prest<- data.frame(prest,Npad)
+
+# Raukerian Shortfall
+rauk<- tlhist%>%select(Year)%>%table()%>%
+  data.frame()
+rauk$.<- as.numeric(as.character(rauk$.))
+colnames(rauk)<- c("year", "NStudy")
+Npadr<-rauk$NStudy/ano[ano$.%in% rauk$year,2]
+rauk<- data.frame(rauk,Npadr)
+colnames(rauk)<- c("year", "NStudy", "Npad")
+
+#Total
+temp2<-temp[,c(1,2,4)]
+colnames(temp2)<- c("year", "NStudy", "Npad")
+
+View(temp2)
+View(rauk)
+View(prest)
+```
+
+3.3. Join tables.
+```{r}
+pr<- rep(c("Prestonian"),nrow(prest))
+ra<- rep(c("Raunkiæran"), nrow(rauk))
+to<- rep(c("Total"), nrow(temp))
+sh<-c(pr,ra, to)
+shorts<- rbind(prest,rauk, temp2)
+shorts<- data.frame(sh, shorts)
+shorts
+```
+
+
+4. Number of publications per shortfalls.
+```{r}
+fdem<- data.frame(table(tdem$Year))
+flhist<- data.frame(table(tlhist$Year))
+
+fdem[,1]<-as.numeric(as.character(fdem$Var1))
+flhist[,1]<-as.numeric(as.character(flhist$Var1))
+shortfall<- as.factor(c("Prestonian", "Raunkiæran"))
+ns<- c(sum(fdem$Freq),sum(flhist$Freq))
+lacunas<- data.frame(shortfall,ns)
+View(lacunas)
+```
+
+5. Time series of the number of publications standardized by total publications in the area.
+```{r}
+ggplot(temp, aes(x=Var1, y= publipad))+
+  geom_line(size= 1)+
+  geom_point(size= 4)+
+  scale_x_continuous(limits = c(2003,2020), breaks = seq(2003,2020,1))+
+  scale_y_continuous(limits = c(0.0,1.05), breaks = seq(0.0,1.0,0.1))+
+  annotate("text", x = temp$Var1, y = temp$posi, 
+           label = temp$ano.Freq, size= 5)+
+  labs(tag = "a)")+
+  xlab("Year") + 
+  ylab("Number of standardized studies (%)")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 20, colour = "black"),
+        axis.text.x = element_text(size = 16, colour = "black"),
+        axis.text.y = element_text(size = 16, colour = "black"),
+     panel.border = element_rect(size= 1.2),  plot.tag = element_text(size = 20, face = "bold"))
+
+#ggsave(filename = "tempseries.tiff", width = 34, 
+ #       height = 25, units = "cm", dpi = 600)
+```
+
+5.1 Figure with two shortfalls.
+```{r, fig.height=8}
+ggplot(shorts, aes(x=year, y= Npad, colour= sh))+
+  geom_line(size= 1)+
+  geom_point(size= 4)+
+  scale_x_continuous(limits = c(2003,2020), breaks = seq(2003,2020,1))+
+  scale_y_continuous(limits = c(0.0,1), breaks = seq(0.0,1.0,0.1))+
+  scale_color_manual(values = c("Prestonian"= "Darkred", "Raunkiæran"="Darkblue", "Total"= "Black"))+
+  labs(colour= "Shortfall")+
+  ylab("Number of standardized studies (%)")+
+  xlab("Year")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 20, colour = "black"),axis.text.x = element_text(size = 16, colour = "black"),axis.text.y = element_text(size = 16, colour = "black"), panel.border = element_rect(size= 1.4),
+        legend.position = c(0.93,0.93), legend.text = element_text(size= 14), legend.title = element_text(size= 16),
+        plot.tag = element_text(size = 20, face = "bold"))
+
+ggsave(filename = "tempseries.tiff", width = 34, 
+       height = 25, units = "cm", dpi = 600)
+
+```
+
+6. Number of studies for each parameters of Prestonian shortfall.
+Obs: Only parameters that presented one or more studies
+```{r}
+dem<- demo%>%distinct(ID, .keep_all = T)%>%
+  select(-(Obs:Year),-(ID:Species))
+Dem<- ifelse(dem[]!= "NA", 1,0)%>%colSums(na.rm = T)
+Dem<- Dem[Dem[]!=0] 
+Dem<- data.frame(Dem,names(Dem))
+colnames(Dem)<- c("Freq","Param" )
+View(Dem)
+max(Dem$Freq)
+mean(Dem$Freq)
+```
+
+7. Number of studies for each parameters of Raunkiæran shortfall.
+Obs: Only parameters that presented one or more studies
+```{r}
+lhist<- hist%>%distinct(ID, .keep_all = T)%>%
+  select(-(Obs:Year),-(ID:Species))
+Lhist<- ifelse(lhist[]!= "NA", 1,0)%>%colSums(na.rm = T)
+Lhist<- Lhist[Lhist[]!=0]
+Lhist<- data.frame(Lhist,names(Lhist))
+colnames(Lhist)<- c("Freq","Param" )
+ParamType<- if_else(
+     Lhist$Param =="HomeRangeSize"|Lhist$Param=="HomeRangeSize(SE)"|Lhist$Param=="MixedFlocks"|Lhist$Param=="HabitatUse"|Lhist$Param=="EatingHabit"|Lhist$Param=="Resource(Sp)","Ecological", "Morphological Traits"
+    )
+Lhist[,3]<- ParamType
+Lhist<- cbind.data.frame(Lhist, c(1:nrow(Lhist)))
+colnames(Lhist)<- c("Freq", "Param", "G", "ordem")
+trat<-c("Ecological" = "darkred","Morphological Traits" = "darkblue") 
+View(Lhist)
+max(Lhist$Freq)
+mean(Lhist$Freq)
+```
+
+
+8. Plot of number of studies for each Raunkiæran shortfall parameter.
+```{r}
+ggplot(Lhist, aes(reorder(Param,ordem),Freq, 
+                         colour= 
+                          G, fill= G))+
+  geom_col( width = .40)+
+  coord_flip()+
+  scale_y_continuous(limits = c(0,15), breaks = seq(0,15,1), )+
+  scale_color_manual(values = trat, aesthetics = c("colour", "fill"))+
+  xlab("Raunkiæran shortfall parameters") + 
+  ylab("Number of studies")+
+  #labs(tag = "a)")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 20, colour = "black"),
+        axis.text = element_text(size = 16, colour = "black"),
+        panel.border = element_rect(size= 1.4),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 18),
+        legend.position = c(0.8,0.50),
+        plot.tag = element_text(size= 16, face = "bold"))
+
+ggsave(filename = "StLifeHist.tiff", width = 31, 
+        height = 25, units = "cm", dpi = 600)
+```
+
+9. Plot of number of studies for each Prestonian shortfall parameter.
+```{r}
+ggplot(Dem, aes(Param, Freq))+
+  geom_bar(stat = "identity", fill= "Black", width = .40)+
+  coord_flip()+
+  scale_y_continuous(limits = c(0,15), breaks = seq(0,15,1))+
+  xlab("Prestonian shortfall parameters") + 
+  ylab("Number of studies")+
+  #labs(tag = "b)")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 20, colour = "black"),
+        axis.text = element_text(size = 16, colour = "black"),
+        panel.border = element_rect(size= 1.4),
+        plot.tag = element_text(size = 16, face= "bold"))
+
+ggsave(filename = "Stdemography.tiff", width = 31, 
+       height = 25, units = "cm", dpi = 600)
+```
+
+
+10. Frequence of parameters per species for Prestonian shortfal.
+```{r}
+dem2<-demo%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)%>%
+  arrange(Species)%>%select(-(Obs:Year),-(ID))
+
+dem3<-as.data.frame(ifelse(dem2[]!= "NA", 1,0))
+dem3[,1]<- dem2[,1]
+dem3<-dem3%>%replace(is.na(.), 0)%>%
+    group_by(Species)%>%
+    summarise_all(funs(sum))
+dem4<- dem3[,2:ncol(dem3)]!=0
+dem4<-replace(dem4,dem4,1)
+dem4<- rowSums(dem4)
+demcont<- data.frame(dem3$Species,dem4)
+colnames(demcont)<-c("Species","Param")
+View(demcont)
+```
+
+11. Frequence plot of parameters per species for Prestonian shortfal.
+```{r}
+b<-ggplot(demcont, aes(x = Param)) +
+  geom_histogram(fill = "Black", colour= "white",size= .3, binwidth = 1)+
+  scale_x_continuous(breaks= seq(0,10,1),
+                   limits = c(0,10))+
+  scale_y_continuous(breaks= seq(0,30,2),
+                     limits = c(0,30))+
+    
+  xlab("Number of parameters") + 
+  #ylab("Number of species")+
+  ggtitle("Prestonian shortfall",)+
+  labs(tag = "b)")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title.x= element_text(size = 16, colour = "black"),
+        axis.title.y = element_blank(),
+        axis.text = element_text(size = 16, colour = "black"),
+        panel.border = element_rect(size= 1.4),
+        plot.title  = element_text(size = 20, 
+                                   hjust = .5),
+        plot.tag = element_text(size = 20, face = "bold"))
+
+ggsave(filename = "Spdem.tiff", width = 31, 
+        height = 25, units = "cm", dpi = 600)
+
+```
+
+12. Frequence of parameters per species for Raunkiæran shortfal.
+```{r}
+lhist2<-hist%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)%>%
+  arrange(Species)%>%select(-(Obs:Year),-(ID))
+View(lhist2)
+
+lhist3<-as.data.frame(ifelse(lhist2[]!= "NA", 1,0))
+lhist3[,1]<- lhist2[,1]
+View(lhist3)
+lhist3<-lhist3%>%replace(is.na(.), 0)%>%
+    group_by(Species)%>%
+    summarise_all(funs(sum))
+lhist4<- lhist3[,2:ncol(lhist3)]!=0
+lhist4<-replace(lhist4,lhist4,1)
+lhist4<- rowSums(lhist4)
+lhistcont<- data.frame(lhist3$Species,lhist4)
+colnames(lhistcont)<-c("Species","Param")
+View(lhistcont)
+
+```
+
+13. Frequence plot of parameters per species for Raunkiæran shortfal.
+```{r}
+a<-ggplot(lhistcont, aes(x = Param)) +
+  geom_histogram(fill = "Black", colour= "white", size= .3, binwidth =1)+
+ scale_x_continuous(breaks= seq(0,24,2),
+                   limits = c(0,24))+
+  scale_y_continuous(breaks= seq(0,30,2),
+                     limits = c(0,30))+
+  ggtitle("Raunkiæran shortfall")+
+  labs(tag = "a)")  +
+  xlab("Number of parameters") + 
+  ylab("Number of species")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 16, colour = "black"),
+        axis.text = element_text(size = 16, colour = "black"),
+        panel.border = element_rect(size= 1.4),
+        plot.title  = element_text(size = 20, 
+                                   hjust = .5),
+        plot.tag = element_text(size = 20, face = "bold"))
+
+ggsave(filename = "sphist.tiff", width = 31, 
+        height = 25, units = "cm", dpi = 600)
+
+```
+
+14. Joining the plots of Raunkiæran and Prestonian shortfalls.
+```{r}
+ggarrange(a,b,ncol = 2, nrow = 1)
+
+ggsave(filename = "spst.tiff", width = 34, 
+       height = 25, units = "cm", dpi = 600)
+```
+
+15. Frequency of studies by species for clutch size and variation.
+```{r}
+cs<-demo%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)%>%
+  arrange(Species)%>%select("ClutchSize", "ClutchSize(SE)","ClutchSize(max)" )
+ cs[which(cs$`ClutchSize(max)`>=0),3]<-1 
+View(cs)
+
+cs2<-as.data.frame(ifelse(cs[]!= "NA", 1,0))
+cs2[,1]<- cs[,1]
+View(cs2)
+
+cs2<-cs2%>%replace(is.na(.), 0)%>%
+    group_by(Species)%>%
+    summarise_all(funs(sum))
+View(cs2)
+
+param1<- rep(c("Clutch size"), nrow(cs2))  
+param2<- rep(c("Clutch size variation"), nrow(cs2))
+s<-data.frame(param1, cs2$ClutchSize)
+v<-data.frame(param2, cs2$`ClutchSize(SE)`)
+colnames(s)<- c("Param", "Fsp")
+colnames(v)<- c("Param", "Fsp")
+cs3<-bind_rows(s,v)
+cs3<- cs3%>%filter(Fsp!=0)
+View(cs3)
+
+```
+
+16. Frequency plot of studies by species for clutch size and variation.
+```{r}
+ab<-ggplot(cs3, aes(x = Fsp, fill= Param, colour= Param)) +
+  geom_histogram( size= .3, position = "dodge",bins = 10)+
+ scale_color_manual(values = c("darkred", "darkblue"),
+                    aesthetics = c("colour", "fill"))+
+  
+  scale_x_continuous(breaks= seq(1,2,1),
+                     limits = c(0.85,2.1))+
+  scale_y_continuous(breaks= seq(0,34,2),
+                     limits = c(0,34))+
+  ggtitle("Prestonian shortfall")+
+  labs(tag = "b)")+  
+  xlab("Number of studies") + 
+  ylab("Number of species")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title.x = element_text(size = 16, colour = "black"),
+        axis.text = element_text(size = 16, colour = "black"),
+        axis.title.y = element_blank(),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 18),
+        legend.position = c(0.75,0.9),
+        panel.border = element_rect(size= 1.4),
+        plot.title  = element_text(size = 20, 
+                                   hjust = .5),
+        plot.tag = element_text(size = 20, face = "bold"))
+  
+  #ggsave(filename = "spsize.tiff", width = 31, 
+   #     height = 25, units = "cm", dpi = 600)
+
+```
+
+
+17. Frequency of studies by species for body mass and variation.
+```{r}
+bm<-hist%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)%>%
+  arrange(Species)%>%select("BodyMass", "BodyMass(SE)","BodyMass(max)" )
+ bm[which(bm$`BodyMass(max)`>=0),3]<-1 
+View(bm)
+
+bm2<-as.data.frame(ifelse(bm[]!= "NA", 1,0))
+bm2[,1]<- bm[,1]
+View(bm2)
+
+bm2<-bm2%>%replace(is.na(.), 0)%>%
+    group_by(Species)%>%
+    summarise_all(funs(sum))
+View(bm2)
+
+param1<- rep(c("Body Mass"), nrow(bm2))  
+param2<- rep(c("Body Mass variation"), nrow(bm2))
+s<-data.frame(param1, bm2$BodyMass)
+v<-data.frame(param2, bm2$`BodyMass(SE)`)
+colnames(s)<- c("Param", "Fsp")
+colnames(v)<- c("Param", "Fsp")
+bm3<-bind_rows(s,v)
+bm3<- bm3%>% filter(Fsp!=0)
+View(bm3)
+```
+
+
+18. Frequency plot of studies by species for clutch size and variation.
+```{r}
+bb<-ggplot(bm3, aes(x = Fsp, fill= Param, colour= Param)) +
+  geom_histogram( size= .3, position = "dodge",bins = 10)+
+ scale_color_manual(values = c("darkred", "darkblue"),
+                    aesthetics = c("colour", "fill"))+
+  
+  scale_x_continuous(breaks= seq(1,3,1),
+                     limits = c(0.85,3.20))+
+  scale_y_continuous(breaks= seq(0,34,2),
+                     limits = c(0,34))+
+  ggtitle("Raunkiæran shortfall")+
+  labs(tag = "a)")+
+  xlab("Number of studies") + 
+  ylab("Number of species")+
+  theme_bw()+
+  
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 16, colour = "black"),
+        axis.text = element_text(size = 16, colour = "black"),legend.title = element_blank(),
+        legend.text = element_text(size = 18),
+        legend.position = c(0.7,0.9),
+        panel.border = element_rect(size= 1.4),
+        plot.title  = element_text(size = 20, 
+                                   hjust = .5),
+        plot.tag = element_text(size = 20, face = "bold"))
+  
+#ggsave(filename = "SpBSize.tiff", width = 31, 
+ #       height = 25, units = "cm", dpi = 600)
+
+```
+
+19. Joining the plots body mass and clutch size.
+```{r}
+ggarrange(bb,ab,ncol = 2, nrow = 1)
+ggsave(filename = "spcbsize.tiff", width = 36, 
+       height = 25, units = "cm", dpi = 600)
+```
+
+
+20. Proportion of parameters without at least one study.
+```{r}
+gaphist<-hist%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)%>%
+  arrange(Species)%>%select(-(Obs:Year),-(ID))
+
+gaphist<-as.data.frame(ifelse(gaphist[]!= "NA", 1,0))
+gaphist<-gaphist%>%replace(is.na(.), 0)
+totalhist<- ncol(gaphist[,-1])
+soma1<-colSums(gaphist)
+szero<-length(soma1[soma1[]==0])
+rhist<- szero/totalhist
+
+gapdem<-demo%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)%>%
+  arrange(Species)%>%select(-(Obs:Year),-(ID))
+
+gapdem<-as.data.frame(ifelse(gapdem[]!= "NA", 1,0))
+gapdem<-gapdem%>%replace(is.na(.), 0)
+
+totaldem<- ncol(gapdem[,-1])
+soma2<-colSums(gapdem)
+szero<-length(soma2[soma2[]==0])
+rdem<- szero/totaldem
+
+gap<- c("Prestonian","Raunkiæran" )
+perc<- c(rhist,rdem)
+perc2<- data.frame(gap,perc)
+View(perc2)
+```
+
+# Data analysis of the relationship between body size and number of studies.
+
+1. Calculating the body size mean and number of studies by gender.
+```{r}
+hist2<- hist%>%select(ID,Species,BodyMass)%>% replace(is.na(.), 0)
+ genero<-hist2$Species%>%
+   str_split(" ", n=2, simplify = T)
+  hist2[,2]<-genero[,1]
+  
+bodymean<- hist2%>% group_by(Species)%>%
+   summarise(BodyMean= mean(BodyMass))
+
+bodymean<- bodymean%>% filter(BodyMean!= 0)
+demo2<- demo%>%select(ID,Species)
+
+genero<-demo2$Species%>%
+   str_split(" ", n=2, simplify = T)
+  demo2[,2]<-genero[,1]
+
+ demo3<-demo2%>%
+    filter(Species== "Anisognathus"|Species== "Chalcothraupis"|Species== "Conothraupis"|Species== "Diglossa"|Species== "Donacospiza"|Species== "Gubernatrix"|Species== "Ixothraupis"|Species== "Paroaria"|Species== "Schistochlamys"|Species== "Sporophila"|Species== "Stilpnia"|Species== "Tangara"|Species== "Thlypopsis"|Species== "Thraupis" )
+
+  
+ hist3<- hist2[,-3]
+ 
+ dh<-rbind(demo3, hist3)
+
+num<-dh%>%distinct(ID,Species, .keep_all = T)%>% select(Species)
+nstud<-as.data.frame(table(num))
+
+nstud2<-nstud%>%
+    filter(num== "Anisognathus"|num== "Chalcothraupis"|num== "Conothraupis"|num== "Diglossa"|num== "Donacospiza"|num== "Gubernatrix"|num== "Ixothraupis"|num== "Paroaria"|num== "Schistochlamys"|num== "Sporophila"|num== "Stilpnia"|num== "Tangara"|num== "Thlypopsis"|num== "Thraupis" )
+
+bodymean[,3]<- nstud2$Freq
+colnames(bodymean)<-c("Genus", "BodyMean", "Nstud")
+View(bodymean)
+```
+
+2. Loading packages for fit non-linear regression.
+```{r}
+library(lattice)
+library(latticeExtra)
+library(nlme)
+library(minpack.lm)
+library(nls2)
+library(openxlsx)
+library(nlstools)
+```
+
+3. Fiting non-linear regression with Gompertz equation. 
+```{r}
+# Gompertz equation
+#model<-nlsLM(bodymean$Nstud~a*bodymean$BodyMean^-b,
+ #            start=list(a=100,b=0.000004),data = bodymean,
+  #     alg="default")
+
+model2<- nls(bodymean$Nstud ~ a*bodymean$BodyMean^b,
+             start=list(a=0.1,b=0.00004), data = bodymean)
+model2
+result<-summary(model2)
+Regres<-data.frame(result$coefficients)
+
+write.xlsx(Regres,"Result.xlsx" )
+```
+
+4. Plot of relationship between body mean mass and number of studies.
+```{r}
+ggplot(bodymean,aes(x=BodyMean, y= Nstud))+
+ geom_point(size= 3.5)+
+  stat_smooth(method = "nls",
+              formula = y ~ a*x^-b,
+              method.args = list(start = list(a=0.1,b=0.00004)),
+              se = F, colour= "red")+
+  scale_x_continuous(breaks= seq(0,50,5),
+                    limits = c(0,50))+
+  scale_y_continuous(breaks= seq(0,24,2),
+                     limits = c(0, 24))+
+  xlab("Body mean mass (g)") + 
+  ylab("Number of studies")+
+  annotate("text",y= 24, x= 40 ,label="t= -1.413; df= 12; p= 0.183", size= 8)+
+  annotate("text",y= 22.5, x= 36 ,label="y== 14.05*x^{-0.52} ",parse= T, size= 8)+
+  annotate("text",y= 22, x= 8 ,label= "Sporophila", 
+           size= 8, fontface="italic")+
+  annotate("text",y= 0.3, x= 47 ,label= "Gubernatrix", 
+           size= 8, fontface="italic")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size = 20, colour = "black"),
+        axis.text = element_text(size = 16, colour = "black"),
+        panel.border = element_rect(size= 1.4))
+ggsave(filename = "Reg2.tiff", width = 31, 
+        height = 25, units = "cm", dpi = 600)
+
+
+```
+
+# Analysis of relationship between studies parameters and phylogeny.
+
+
+1. Building dataset for analysis.
+```{r}
+demo<- demo%>% select(-(Obs:Year))
+hist<- hist%>% select(-(Obs:Year))
+
+dem<-demo%>%arrange(Species)%>%replace(is.na(.), 0)
+his<- hist%>%arrange(Species)%>% replace(is.na(.), 0)
+dem[,c(3:ncol(dem))]<- ifelse(dem[,c(3:ncol(dem))] > 0, 1,0)
+his[,c(3:ncol(his))]<- ifelse(his[,c(3:ncol(his))] > 0, 1,0)
+View(dem)
+View(his)
+```
+
+```{r}
+dem2<- dem%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)
+
+his2<- his%>%group_by(Species)%>%
+  distinct(ID, .keep_all = T)
+View(dem2)
+dem3<-by(dem2[,3:ncol(dem2)],INDICES = as.factor(dem2$Species), FUN= colSums)
+
+his3<-by(his2[,3:ncol(his2)],INDICES = as.factor(his2$Species), FUN= colSums)
+```
+
+2. Function for build presence-absence table.
+```{r}
+pu<- function(x){
+  Ncol<-length(names(x))+1
+  Nlin<-length(x[[1]])
+  tabela<- as.data.frame(matrix(nrow = Nlin, ncol = Ncol))
+  tabela[,1]<- names(x[[1]])
+  colnames(tabela)<- c("Param",names(x))
+  
+  for (i in 1:length(names(x))) {
+      tabela[,i+1]<- x[[i]]
+  }
+  cnames<- c("Param", tabela[,1])
+  tab<- t(tabela)
+  tab<-data.frame(names(x),tab[-1,])
+  colnames(tab)<-cnames
+  return(tab)
+}
+```
+
+3. Creating and saving presence-absence tables.
+```{r}
+dem4<-pu(dem3); View(dem4)
+his4<-pu(his3); View(his4)
+write.xlsx(dem4, "dempa.xlsx")
+write.xlsx(his4, "histpa.xlsx")
+```
+
+4. Loading data.
+```{r}
+#setwd("C:\\Users\\Edgar\\OneDrive - unb.br\\Doutorado\\CapI\\Dados_analises")
+#library(ape);library(picante);library(phytools)
+
+#dados<-read.xlsx("DadosEstudos.xlsx", sheet = 1)
+#traup<-read.tree("phy_cons.txt")
+
+traup$tip.label<-traup$tip.label%>%
+  str_replace_all("_"," ")
+```
+
+5. Altering Species names
+```{r}
+a<- !dados$Param %in% traup$tip.label
+
+repl<-c("Tiaris bicolor","Poospiza thoracica","Tangara ruficervix","Tangara guttata","Tangara rufigula","Saltator atricollis","Oryzoborus angolensis","Oryzoborus maximiliani","Tangara cayana","Tangara cyanicollis", "Tangara vitriolina", "Oreomanes fraseri")
+b<-dados$Param[a]
+b<-b[- c(8,9,10,11)]
+
+for(i in 1:length(b)){
+  traup$tip.label[which(traup$tip.label== repl[i])]<-b[i]
+}
+ write.tree(traup,"phy_cons.txt" )
+```
+
+
+6. Selecinando na filogenia apenas as espécies do banco de dados
+```{r}
+ traup$tip.label<-traup$tip.label%>%str_replace_all("_"," ")
+c<-dados$Param %in% traup$tip.label
+c2<- dados$Param[c]
+dados2<-dados%>%filter(Param%in%c2)
+
+retirar<-!traup$tip.label%in%dados$Param
+ret2<-traup$tip.label[retirar]
+traup<-drop.tip(traup, ret2)
+traup$tip.label
+ write.tree(traup,"phyThraup.txt" )
+ 
+```
+
+7. 
+```{r}
+# Calculando matriz de distnacia dos parametros
+dist.trait <- as.matrix(dist(dados2[,-1]))
+
+# Distancia filogenética
+dist.tree <- cophenetic(traup)
+
+# Calcula o Mantel e simula um modelo nulo para o teste de hipótese
+Mantel <- mantel(dist.trait, dist.tree, permutation = 10000)
+Mantel
+
+```
