@@ -9,31 +9,12 @@ output: html_document
 
 1. Defining working directory, loading packages and database.
 ```{r, message=FALSE}
-setwd("C:\\Users\\Edgar\\OneDrive - unb.br\\Doutorado\\CapI\\Dados_analises")
+setwd("C:\\Users\\Edgar\\OneDrive - unb.br\\Doutorado\\CapI\\Analises")
 library("tidyverse")
-library("bibliometrix")
 library("openxlsx")
 library("readxl")
 library("ggpubr")
-
-web<-convert2df("WOS.bib","wos", "bibtex")
-scop<- convert2df("scopus.bib","scopus", "bibtex")
-```
-
-
-2. Joining the data from the two databases, removing duplicates and saving the new dataset.
-```{r}
-dados=  mergeDbSources(scop, web, remove.duplicated = T )
-nrow(dados)
-write.xlsx(dados, "Dados.xlsx")
-```
-
-
-3. Filtering only the studies that passed through the reading of abstract.
-```{r}
-screnned<-read_excel("dados.xlsx") 
-filtrados<- screnned%>% filter(INCLUDE== "yes")
-write.xlsx(filtrados, "Dados2.xlsx")
+library("reshape")
 ```
 
 
@@ -41,8 +22,8 @@ write.xlsx(filtrados, "Dados2.xlsx")
 
 1. Loading the Prestonian and Raunkiæran shortfalls database.
 ```{r}
-demo<- read.xlsx("Dados_lacunas.xlsx", sheet = 1)
-hist<- read.xlsx("Dados_lacunas.xlsx", sheet = 2)
+demo<- read.xlsx("Shortfall_data.xlsx", sheet = 1)
+hist<- read.xlsx("Shortfall_data.xlsx", sheet = 2)
 View(demo)
 View(hist)
 ```
@@ -68,7 +49,7 @@ View(fall)
 
 3. Calculating the total number of articles per year.
 ```{r}
-alldata<- read.xlsx("Dados2.xlsx", sheet = 1)
+alldata<- read.xlsx("AllData.xlsx")
 ano<- alldata%>%select(PY)%>%table()%>%
   data.frame()
 ano[,1]<-as.numeric(as.character(ano$.))
@@ -82,7 +63,7 @@ View(temp)
 ```
 
 
-3.1. Calcular o número de artigos por ano separademente para cada lacuna.
+3.1. Time series percentage of each shortfall.
 ```{r}
 tdem<- demo%>%select(ID,Year)
 tlhist<- hist%>%select(ID,Year)
@@ -148,30 +129,7 @@ lacunas<- data.frame(shortfall,ns)
 View(lacunas)
 ```
 
-5. Time series of the number of publications standardized by total publications in the area.
-```{r}
-ggplot(temp, aes(x=Var1, y= publipad))+
-  geom_line(size= 1)+
-  geom_point(size= 4)+
-  scale_x_continuous(limits = c(2003,2020), breaks = seq(2003,2020,1))+
-  scale_y_continuous(limits = c(0.0,1.05), breaks = seq(0.0,1.0,0.1))+
-  annotate("text", x = temp$Var1, y = temp$posi, 
-           label = temp$ano.Freq, size= 5)+
-  labs(tag = "a)")+
-  xlab("Year") + 
-  ylab("Number of standardized studies (%)")+
-  theme_bw()+
-  theme(panel.grid = element_blank(),
-        axis.title = element_text(size = 20, colour = "black"),
-        axis.text.x = element_text(size = 16, colour = "black"),
-        axis.text.y = element_text(size = 16, colour = "black"),
-     panel.border = element_rect(size= 1.2),  plot.tag = element_text(size = 20, face = "bold"))
-
-#ggsave(filename = "tempseries.tiff", width = 34, 
- #       height = 25, units = "cm", dpi = 600)
-```
-
-5.1 Figure with two shortfalls.
+5. Figure with two shortfalls.
 ```{r, fig.height=8}
 ggplot(shorts, aes(x=year, y= Npad, colour= sh))+
   geom_line(size= 1)+
@@ -180,7 +138,7 @@ ggplot(shorts, aes(x=year, y= Npad, colour= sh))+
   scale_y_continuous(limits = c(0.0,1), breaks = seq(0.0,1.0,0.1))+
   scale_color_manual(values = c("Prestonian"= "Darkred", "Raunkiæran"="Darkblue", "Total"= "Black"))+
   labs(colour= "Shortfall")+
-  ylab("Number of standardized studies (%)")+
+  ylab("Percentage of studies")+
   xlab("Year")+
   theme_bw()+
   theme(panel.grid = element_blank(),
@@ -196,82 +154,81 @@ ggsave(filename = "tempseries.tiff", width = 34,
 6. Number of studies for each parameters of Prestonian shortfall.
 Obs: Only parameters that presented one or more studies
 ```{r}
-dem<- demo%>%distinct(ID, .keep_all = T)%>%
-  select(-(Obs:Year),-(ID:Species))
-Dem<- ifelse(dem[]!= "NA", 1,0)%>%colSums(na.rm = T)
-Dem<- Dem[Dem[]!=0] 
-Dem<- data.frame(Dem,names(Dem))
-colnames(Dem)<- c("Freq","Param" )
+dem<- demo%>%select(-(Obs:Year),-(ID:Species))
+dem<-ifelse(dem[]!= "NA", 1,0)
+dem<- replace(x = dem, list = is.na(dem), values = 0)
+Species<-demo$Species
+dem2<- data.frame(Species, dem)
+dem2<-dem2%>%group_by(Species) %>% summarise_each(funs(sum))
+
+sp<- dem2$Species
+dem2<- dem2[,-1]
+rownames(dem2)<- sp
+colnames(dem2)<- colnames(dem)
+dem3<- as.matrix(dem2)
+Dem<- melt(dem3)
+colnames(Dem)<- c("Specie", "Parameter", "Value")
+
 View(Dem)
-max(Dem$Freq)
-mean(Dem$Freq)
 ```
 
 7. Number of studies for each parameters of Raunkiæran shortfall.
 Obs: Only parameters that presented one or more studies
 ```{r}
-lhist<- hist%>%distinct(ID, .keep_all = T)%>%
-  select(-(Obs:Year),-(ID:Species))
-Lhist<- ifelse(lhist[]!= "NA", 1,0)%>%colSums(na.rm = T)
-Lhist<- Lhist[Lhist[]!=0]
-Lhist<- data.frame(Lhist,names(Lhist))
-colnames(Lhist)<- c("Freq","Param" )
-ParamType<- if_else(
-     Lhist$Param =="HomeRangeSize"|Lhist$Param=="HomeRangeSize(SE)"|Lhist$Param=="MixedFlocks"|Lhist$Param=="HabitatUse"|Lhist$Param=="EatingHabit"|Lhist$Param=="Resource(Sp)","Ecological", "Morphological Traits"
-    )
-Lhist[,3]<- ParamType
-Lhist<- cbind.data.frame(Lhist, c(1:nrow(Lhist)))
-colnames(Lhist)<- c("Freq", "Param", "G", "ordem")
-trat<-c("Ecological" = "darkred","Morphological Traits" = "darkblue") 
+lhist<- hist%>%select(-(Obs:Year),-(ID:Species))
+lhist<-ifelse(lhist[]!= "NA", 1,0)
+lhist<- replace(x = lhist, list = is.na(lhist), values = 0)
+Species<-hist$Species
+lhist2<- data.frame(Species, lhist)
+lhist2<-lhist2%>%group_by(Species) %>% summarise_each(funs(sum))
+
+sp<- lhist2$Species
+lhist2<- lhist2[,-1]
+rownames(lhist2)<- sp
+colnames(lhist2)<- colnames(lhist)
+lhist3<- as.matrix(lhist2)
+Lhist<- melt(lhist3)
+colnames(Lhist)<- c("Specie", "Parameter", "Value")
+
 View(Lhist)
-max(Lhist$Freq)
-mean(Lhist$Freq)
 ```
 
 
 8. Plot of number of studies for each Raunkiæran shortfall parameter.
 ```{r}
-ggplot(Lhist, aes(reorder(Param,ordem),Freq, 
-                         colour= 
-                          G, fill= G))+
-  geom_col( width = .40)+
-  coord_flip()+
-  scale_y_continuous(limits = c(0,15), breaks = seq(0,15,1), )+
-  scale_color_manual(values = trat, aesthetics = c("colour", "fill"))+
-  xlab("Raunkiæran shortfall parameters") + 
-  ylab("Number of studies")+
-  #labs(tag = "a)")+
+ggplot(Lhist, aes(y = Parameter, x = Specie, fill = Value)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = Value), color = "white", size = 4.5) +
+  labs( title = "Raunkiæran Shortfall", x= "Species",
+       y= "Parameters")+
+  coord_fixed()+
   theme_bw()+
-  theme(panel.grid = element_blank(),
-        axis.title = element_text(size = 20, colour = "black"),
-        axis.text = element_text(size = 16, colour = "black"),
-        panel.border = element_rect(size= 1.4),
-        legend.title = element_blank(),
-        legend.text = element_text(size = 18),
-        legend.position = c(0.8,0.50),
-        plot.tag = element_text(size= 16, face = "bold"))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title = element_text(size = 25, colour = "black"),
+        axis.text = element_text(size= 16, colour = "black"),
+        plot.title = element_text(hjust = 0.5, color = "Black", size = 20),
+        legend.position = "none")
 
-ggsave(filename = "StLifeHist.tiff", width = 31, 
-        height = 25, units = "cm", dpi = 600)
+ggsave(filename = "StLifeHist.tiff", width = 50, 
+        height = 30, units = "cm", dpi = 600)
 ```
 
 9. Plot of number of studies for each Prestonian shortfall parameter.
 ```{r}
-ggplot(Dem, aes(Param, Freq))+
-  geom_bar(stat = "identity", fill= "Black", width = .40)+
-  coord_flip()+
-  scale_y_continuous(limits = c(0,15), breaks = seq(0,15,1))+
-  xlab("Prestonian shortfall parameters") + 
-  ylab("Number of studies")+
-  #labs(tag = "b)")+
+ggplot(Dem, aes(y = Parameter, x = Specie, fill = Value)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = Value), color = "white", size = 4.5, face= "bold") +
+  labs( title = "Prestonian Shortfall", x= "Species",
+       y= "Parameters")+
+  coord_fixed()+
   theme_bw()+
-  theme(panel.grid = element_blank(),
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         axis.title = element_text(size = 20, colour = "black"),
-        axis.text = element_text(size = 16, colour = "black"),
-        panel.border = element_rect(size= 1.4),
-        plot.tag = element_text(size = 16, face= "bold"))
+        axis.text = element_text(size= 14, colour = "black"),
+        plot.title = element_text(hjust = 0.5, color = "Black", size = 20),
+        legend.position = "none")
 
-ggsave(filename = "Stdemography.tiff", width = 31, 
+ggsave(filename = "Stdemography.tiff", width = 25, 
        height = 25, units = "cm", dpi = 600)
 ```
 
