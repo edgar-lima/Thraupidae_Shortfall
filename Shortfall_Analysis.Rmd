@@ -154,8 +154,7 @@ ggsave(filename = "tempseries.tiff", width = 34,
 6. Number of studies for each parameters of Prestonian shortfall.
 Obs: Only parameters that presented one or more studies
 ```{r}
-
-dem<- demo%>%distinct(ID, .keep_all = T)%>%
+dem<- demo%>%distinct(ID, Species, .keep_all = T)%>%
   select(-(Obs:Year),-(ID))
 Species<-dem$Species
 dem<- dem%>%select(-Species)
@@ -178,7 +177,7 @@ View(Dem)
 7. Number of studies for each parameters of Raunkiæran shortfall.
 Obs: Only parameters that presented one or more studies
 ```{r}
-lhist<- hist%>%distinct(ID, .keep_all = T)%>%
+lhist<- hist%>%distinct(ID,Species,.keep_all = T)%>%
   select(-(Obs:Year),-(ID))
 Species<-lhist$Species
 lhist<- lhist%>%select(-Species)
@@ -196,6 +195,8 @@ Lhist<- melt(lhist3)
 colnames(Lhist)<- c("Specie", "Parameter", "Value")
 
 View(Lhist)
+
+as.numeric(by(Lhist$Value,INDICES = Lhist$Parameter, FUN = sum ))
 ```
 
 
