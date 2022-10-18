@@ -154,10 +154,13 @@ ggsave(filename = "tempseries.tiff", width = 34,
 6. Number of studies for each parameters of Prestonian shortfall.
 Obs: Only parameters that presented one or more studies
 ```{r}
-dem<- demo%>%select(-(Obs:Year),-(ID:Species))
+
+dem<- demo%>%distinct(ID, .keep_all = T)%>%
+  select(-(Obs:Year),-(ID))
+Species<-dem$Species
+dem<- dem%>%select(-Species)
 dem<-ifelse(dem[]!= "NA", 1,0)
 dem<- replace(x = dem, list = is.na(dem), values = 0)
-Species<-demo$Species
 dem2<- data.frame(Species, dem)
 dem2<-dem2%>%group_by(Species) %>% summarise_each(funs(sum))
 
@@ -175,10 +178,12 @@ View(Dem)
 7. Number of studies for each parameters of Raunkiæran shortfall.
 Obs: Only parameters that presented one or more studies
 ```{r}
-lhist<- hist%>%select(-(Obs:Year),-(ID:Species))
+lhist<- hist%>%distinct(ID, .keep_all = T)%>%
+  select(-(Obs:Year),-(ID))
+Species<-lhist$Species
+lhist<- lhist%>%select(-Species)
 lhist<-ifelse(lhist[]!= "NA", 1,0)
 lhist<- replace(x = lhist, list = is.na(lhist), values = 0)
-Species<-hist$Species
 lhist2<- data.frame(Species, lhist)
 lhist2<-lhist2%>%group_by(Species) %>% summarise_each(funs(sum))
 
