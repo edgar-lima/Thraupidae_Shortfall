@@ -205,8 +205,8 @@ as.numeric(by(Lhist$Value,INDICES = Lhist$Parameter, FUN = sum ))
 ggplot(Lhist, aes(y = Parameter, x = Specie, fill = Value)) +
   geom_tile(color = "black") +
   geom_text(aes(label = Value), color = "white", size = 4.5) +
-  labs( title = "Raunkiæran Shortfall", x= "Species",
-       y= "Parameters")+
+  labs(x= "Species",
+       y= "Raunkiæran parameters")+
   coord_fixed()+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -224,8 +224,7 @@ ggsave(filename = "StLifeHist.tiff", width = 50,
 ggplot(Dem, aes(y = Parameter, x = Specie, fill = Value)) +
   geom_tile(color = "black") +
   geom_text(aes(label = Value), color = "white", size = 4.5, face= "bold") +
-  labs( title = "Prestonian Shortfall", x= "Species",
-       y= "Parameters")+
+  labs(x= "Species", y= "Prestonian parameters")+
   coord_fixed()+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
