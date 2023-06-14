@@ -13,7 +13,11 @@ articles published between 2003 and 2020.
 
 
 **Edgar Luiz de Lima**
+
 Ecologist and Environmental Analyst - UFG
+
 PhD candidate in Ecology - UnB
+
 **E-mail:** edgarluizdelima@gmail.com
+
 **In:** https://www.linkedin.com/in/edgar-luiz-de-lima-35646851/
