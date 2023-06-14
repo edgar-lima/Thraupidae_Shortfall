@@ -12,10 +12,8 @@ articles published between 2003 and 2020.
 5. Shortfall_Analysis: RMarkdow document with R Script to analysis.
 
 
-Edgar Luiz de Lima
-
+**Edgar Luiz de Lima**
 Ecologist and Environmental Analyst - UFG
 PhD candidate in Ecology - UnB
-E-mail: edgarluizdelima@gmail.com
-RG: https://www.researchgate.net/profile/Edgar-Luiz-De-Lima
-In: https://www.linkedin.com/in/edgar-luiz-de-lima-35646851/
+**E-mail:** edgarluizdelima@gmail.com
+**In:** https://www.linkedin.com/in/edgar-luiz-de-lima-35646851/
